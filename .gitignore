@@ -44,3 +44,7 @@ next-env.d.ts
 
 # claude code local settings
 .claude/settings.local.json
+
+# supabase CLI state
+supabase/.temp/
+supabase/.branches/

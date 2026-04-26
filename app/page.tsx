@@ -88,14 +88,19 @@ export default function Landing() {
               <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 live-dot text-emerald-500" />
               CABINET — IN SESSION
             </Badge>
+            <Link href="/feed">
+              <Button size="sm" variant="ghost">
+                Sessions
+              </Button>
+            </Link>
             <Link href="/features">
               <Button size="sm" variant="ghost">
                 Features
               </Button>
             </Link>
-            <Link href="/chat">
+            <Link href="/parliament">
               <Button size="sm">
-                Address the cabinet →
+                Enter parliament →
               </Button>
             </Link>
           </div>
@@ -158,9 +163,9 @@ export default function Landing() {
               public policy in real time — and lets anyone fork their own counter-cabinet.
             </p>
             <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/chat">
+              <Link href="/parliament">
                 <Button size="lg" className="px-6">
-                  Address the cabinet →
+                  Enter parliament →
                 </Button>
               </Link>
               <button
@@ -427,7 +432,7 @@ export default function Landing() {
               government think.
             </p>
             <div className="mt-10">
-              <Link href="/chat">
+              <Link href="/parliament">
                 <Button size="lg" className="px-8 text-base">
                   Enter the chamber →
                 </Button>
