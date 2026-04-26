@@ -1,19 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useSearchParams } from "next/navigation";
 import {
   AGENTS,
   AGENT_ORDER,
   DEBATE_SEQUENCE,
   SAMPLE_BILLS,
+  resolveAgent,
   type AgentId,
+  type AgentResolved,
   type Bill,
+  type CabinetMembersMap,
   type DebateEvent,
 } from "@/lib/cabinet";
+import { supabaseBrowser, type CabinetRow } from "@/lib/supabase";
+
+const ACCENT_PILL: Record<string, string> = {
+  violet: "border-violet-600/30 bg-violet-500/10 text-violet-700",
+  amber: "border-amber-600/30 bg-amber-500/10 text-amber-700",
+  emerald: "border-emerald-600/30 bg-emerald-500/10 text-emerald-700",
+  cyan: "border-cyan-600/30 bg-cyan-500/10 text-cyan-700",
+  lime: "border-lime-600/30 bg-lime-500/10 text-lime-700",
+  rose: "border-rose-600/30 bg-rose-500/10 text-rose-700",
+  blue: "border-blue-600/30 bg-blue-500/10 text-blue-700",
+  zinc: "border-zinc-600/30 bg-zinc-500/10 text-zinc-700",
+};
 
 type Status = "idle" | "running" | "done" | "error";
 
@@ -42,6 +58,17 @@ type DebateEventPayload =
   | { type: "debate_id"; id: string };
 
 export default function ParliamentPage() {
+  return (
+    <Suspense fallback={null}>
+      <ParliamentInner />
+    </Suspense>
+  );
+}
+
+function ParliamentInner() {
+  const search = useSearchParams();
+  const requestedCabinetId = search.get("cabinet");
+
   const [bill, setBill] = useState<Bill>(SAMPLE_BILLS[0]);
   const [status, setStatus] = useState<Status>("idle");
   const [turns, setTurns] = useState<CompletedTurn[]>([]);
@@ -49,7 +76,56 @@ export default function ParliamentPage() {
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [debateId, setDebateId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"samples" | "custom">("samples");
+  const [customTitle, setCustomTitle] = useState("");
+  const [customBody, setCustomBody] = useState("");
+  const [customCode, setCustomCode] = useState("");
+  const [cabinets, setCabinets] = useState<CabinetRow[]>([]);
+  const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null);
+  const [activeMembers, setActiveMembers] = useState<CabinetMembersMap | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Load cabinets and resolve selection
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabaseBrowser()
+        .from("cabinets")
+        .select("*")
+        .order("is_preset", { ascending: false })
+        .order("created_at", { ascending: false });
+      const list = (data ?? []) as CabinetRow[];
+      setCabinets(list);
+      if (list.length > 0) {
+        const preferred =
+          list.find((c) => c.id === requestedCabinetId) ??
+          list.find((c) => c.slug === "helios") ??
+          list[0];
+        setSelectedCabinetId(preferred.id);
+      }
+    })();
+  }, [requestedCabinetId]);
+
+  const selectedCabinet =
+    cabinets.find((c) => c.id === selectedCabinetId) ?? null;
+
+  // Members for rendering: while running we trust the server stream's payload;
+  // before/after running we use the picker selection so the bench reflects the
+  // chosen cabinet immediately.
+  const renderMembers: CabinetMembersMap | null =
+    activeMembers ?? selectedCabinet?.members ?? null;
+
+  const resolve = (id: AgentId): AgentResolved => resolveAgent(id, renderMembers);
+
+  const customBill: Bill | null =
+    customTitle.trim() && customBody.trim()
+      ? {
+          title: customTitle.trim(),
+          code: customCode.trim() || `CUSTOM-${Date.now().toString(36).toUpperCase().slice(-6)}`,
+          summary: customBody.trim(),
+        }
+      : null;
+
+  const activeBill: Bill = mode === "custom" && customBill ? customBill : bill;
 
   const total = DEBATE_SEQUENCE.length;
   const turnIdx = active?.index ?? Math.max(turns.length - 1, 0);
@@ -78,12 +154,13 @@ export default function ParliamentPage() {
     setVerdict(null);
     setErrorMsg(null);
     setDebateId(null);
+    setActiveMembers(null);
 
     try {
       const res = await fetch("/api/debate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bill: b }),
+        body: JSON.stringify({ bill: b, cabinetId: selectedCabinetId }),
         signal: ac.signal,
       });
       if (!res.ok || !res.body) {
@@ -114,6 +191,8 @@ export default function ParliamentPage() {
 
           if (event.type === "debate_id") {
             setDebateId(event.id);
+          } else if (event.type === "cabinet") {
+            setActiveMembers(event.members);
           } else if (event.type === "turn_start") {
             cur = {
               index: event.index,
@@ -169,6 +248,11 @@ export default function ParliamentPage() {
             <Wordmark />
           </Link>
           <div className="flex items-center gap-3">
+            <Link href="/cabinet">
+              <Button size="sm" variant="ghost">
+                Cabinet
+              </Button>
+            </Link>
             <Link href="/feed">
               <Button size="sm" variant="ghost">
                 Sessions
@@ -218,12 +302,14 @@ export default function ParliamentPage() {
               <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
                 <span>Bill in session</span>
                 <span className="text-zinc-300">·</span>
-                <span className="text-zinc-700">{bill.code}</span>
+                <span className="text-zinc-700">{activeBill.code}</span>
               </div>
               <h1 className="mt-2 font-display text-3xl tracking-tight md:text-4xl">
-                {bill.title}
+                {activeBill.title}
               </h1>
-              <p className="mt-2 max-w-3xl text-sm text-zinc-600">{bill.summary}</p>
+              <p className="mt-2 line-clamp-3 max-w-3xl text-sm text-zinc-600">
+                {activeBill.summary}
+              </p>
             </div>
             <div className="flex flex-col items-end gap-2">
               <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
@@ -240,26 +326,143 @@ export default function ParliamentPage() {
             </div>
           </div>
 
-          {/* Sample bill picker */}
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-              Sample bills:
-            </span>
-            {SAMPLE_BILLS.map((b) => (
-              <button
-                key={b.code}
-                onClick={() => setBill(b)}
-                className={`rounded-full border px-3 py-1 text-xs transition ${
-                  b.code === bill.code
-                    ? "border-zinc-900 bg-zinc-900 text-white"
-                    : "border-zinc-900/10 bg-white text-zinc-700 hover:border-zinc-900/30"
-                }`}
+          {/* Mode tabs */}
+          <div className="mt-5 flex items-center gap-1 rounded-full border border-zinc-900/10 bg-zinc-900/[0.03] p-1 self-start w-fit">
+            <button
+              onClick={() => setMode("samples")}
+              disabled={status === "running"}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                mode === "samples"
+                  ? "bg-white text-zinc-900 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Samples
+            </button>
+            <button
+              onClick={() => setMode("custom")}
+              disabled={status === "running"}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                mode === "custom"
+                  ? "bg-white text-zinc-900 shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-800"
+              }`}
+            >
+              Custom paste
+            </button>
+          </div>
+
+          {mode === "samples" && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {SAMPLE_BILLS.map((b) => (
+                <button
+                  key={b.code}
+                  onClick={() => setBill(b)}
+                  disabled={status === "running"}
+                  className={`rounded-full border px-3 py-1 text-xs transition ${
+                    b.code === bill.code
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-zinc-900/10 bg-white text-zinc-700 hover:border-zinc-900/30"
+                  }`}
+                >
+                  {b.code} — {b.title.split(" ").slice(0, 4).join(" ")}…
+                </button>
+              ))}
+            </div>
+          )}
+
+          {mode === "custom" && (
+            <div className="mt-4 grid gap-3">
+              <div className="grid gap-3 md:grid-cols-[1fr_180px]">
+                <input
+                  value={customTitle}
+                  onChange={(e) => setCustomTitle(e.target.value)}
+                  placeholder="Bill title (e.g. American Workforce AI Act)"
+                  disabled={status === "running"}
+                  className="rounded-lg border border-zinc-900/10 bg-white px-3 py-2 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-900/30 disabled:opacity-50"
+                />
+                <input
+                  value={customCode}
+                  onChange={(e) => setCustomCode(e.target.value)}
+                  placeholder="Code (optional)"
+                  disabled={status === "running"}
+                  className="rounded-lg border border-zinc-900/10 bg-white px-3 py-2 font-mono text-xs outline-none placeholder:text-zinc-400 focus:border-zinc-900/30 disabled:opacity-50"
+                />
+              </div>
+              <textarea
+                value={customBody}
+                onChange={(e) => setCustomBody(e.target.value)}
+                placeholder="Paste the bill text or summary here. The cabinet will debate whatever you paste — full text, abstract, or even a one-line policy proposal."
+                disabled={status === "running"}
+                rows={6}
+                className="resize-y rounded-lg border border-zinc-900/10 bg-white px-3 py-2 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-900/30 disabled:opacity-50"
+              />
+              <div className="flex items-center justify-between text-[11px] text-zinc-500">
+                <span className="font-mono">
+                  {customBody.length.toLocaleString()} chars
+                </span>
+                {!customBill && (
+                  <span className="font-mono uppercase tracking-widest text-zinc-400">
+                    title and body required
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Cabinet picker */}
+          <div className="mt-5 border-t border-zinc-900/10 pt-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+                Cabinet in session
+              </span>
+              <Link
+                href="/cabinet"
+                className="font-mono text-[11px] text-zinc-500 hover:text-zinc-800"
               >
-                {b.code} — {b.title.split(" ").slice(0, 4).join(" ")}…
-              </button>
-            ))}
+                Manage cabinets ↗
+              </Link>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {cabinets.length === 0 && (
+                <span className="text-xs text-zinc-400">Loading cabinets…</span>
+              )}
+              {cabinets.map((c) => {
+                const accent = ACCENT_PILL[c.accent] ?? ACCENT_PILL.violet;
+                const selected = c.id === selectedCabinetId;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedCabinetId(c.id)}
+                    disabled={status === "running"}
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition ${
+                      selected
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : `${accent} hover:opacity-80`
+                    }`}
+                  >
+                    <span className="font-medium">{c.name}</span>
+                    {c.tagline && !selected && (
+                      <span className="opacity-70">— {c.tagline}</span>
+                    )}
+                    {!c.is_preset && selected && (
+                      <span className="opacity-70">(forked)</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedCabinet?.description && (
+              <p className="mt-2 text-xs text-zinc-500 italic">
+                {selectedCabinet.description}
+              </p>
+            )}
+          </div>
+
+          {/* Action row */}
+          <div className="mt-5 flex flex-wrap items-center gap-2">
             {debateId && status === "done" && (
-              <Link href={`/parliament/${debateId}`} className="ml-auto">
+              <Link href={`/parliament/${debateId}`}>
                 <Button size="sm" variant="ghost">
                   ↗ Permalink
                 </Button>
@@ -267,9 +470,13 @@ export default function ParliamentPage() {
             )}
             <Button
               size="sm"
-              onClick={() => startDebate(bill)}
-              disabled={status === "running"}
-              className={debateId && status === "done" ? "" : "ml-auto"}
+              onClick={() => startDebate(activeBill)}
+              disabled={
+                status === "running" ||
+                (mode === "custom" && !customBill) ||
+                cabinets.length === 0
+              }
+              className="ml-auto"
             >
               {status === "running"
                 ? "Cabinet in session…"
@@ -297,8 +504,8 @@ export default function ParliamentPage() {
 
             {active && (
               <div className="relative flex flex-col items-start gap-6 motion-fade">
-                <SpeakerHeader agentId={active.agentId} intent={active.intent} live />
-                <SpeechBubble agentId={active.agentId}>
+                <SpeakerHeader agent={resolve(active.agentId)} intent={active.intent} live />
+                <SpeechBubble agent={resolve(active.agentId)}>
                   <span className="whitespace-pre-wrap">{active.text}</span>
                   <span className="ml-1 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-zinc-700 align-middle" />
                 </SpeechBubble>
@@ -340,17 +547,17 @@ export default function ParliamentPage() {
                 </div>
               )}
               {recent.map((t) => {
-                const a = AGENTS[t.agentId];
+                const a = resolve(t.agentId);
                 return (
                   <div
                     key={t.index}
                     className="flex gap-3 rounded-lg border border-zinc-900/5 bg-white/70 p-3"
                   >
-                    <Avatar agentId={a.id} size="xs" />
+                    <Avatar agent={a} size="xs" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-xs font-medium text-zinc-900">
-                          {a.role}
+                          {a.isOverridden ? a.name : a.role}
                         </span>
                         <span className="font-mono text-[9px] uppercase tracking-wider text-zinc-400">
                           {t.intent}
@@ -377,7 +584,7 @@ export default function ParliamentPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
             {AGENT_ORDER.map((id) => {
-              const a = AGENTS[id];
+              const a = resolve(id);
               const isActive = currentAgentId === id && status === "running";
               return (
                 <div
@@ -388,10 +595,14 @@ export default function ParliamentPage() {
                       : "border-zinc-900/10 bg-white/50"
                   }`}
                 >
-                  <Avatar agentId={a.id} size="md" active={isActive} />
+                  <Avatar agent={a} size="md" active={isActive} />
                   <div className="text-center">
-                    <div className="text-xs font-medium text-zinc-900">{a.role}</div>
-                    <div className="font-mono text-[10px] text-zinc-500">{a.trait}</div>
+                    <div className="truncate text-xs font-medium text-zinc-900" title={a.name}>
+                      {a.isOverridden ? a.name : a.role}
+                    </div>
+                    <div className="truncate font-mono text-[10px] text-zinc-500" title={a.role}>
+                      {a.isOverridden ? a.role : a.trait}
+                    </div>
                   </div>
                   {isActive && (
                     <span className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -430,22 +641,21 @@ function IdleStage({ onStart }: { onStart: () => void }) {
 }
 
 function SpeakerHeader({
-  agentId,
+  agent,
   intent,
   live,
 }: {
-  agentId: AgentId;
+  agent: AgentResolved;
   intent: string;
   live?: boolean;
 }) {
-  const a = AGENTS[agentId];
   return (
     <div className="flex w-full items-center gap-4">
-      <Avatar agentId={agentId} size="lg" active />
+      <Avatar agent={agent} size="lg" active />
       <div>
-        <div className="font-display text-2xl text-zinc-900">{a.name}</div>
+        <div className="font-display text-2xl text-zinc-900">{agent.name}</div>
         <div className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-          {a.role}
+          {agent.role}
           {live && (
             <span className="ml-2 inline-flex items-center gap-1 text-emerald-700">
               <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 live-dot text-emerald-500" />
@@ -462,15 +672,14 @@ function SpeakerHeader({
 }
 
 function Avatar({
-  agentId,
+  agent,
   size = "md",
   active,
 }: {
-  agentId: AgentId;
+  agent: AgentResolved;
   size?: "xs" | "md" | "lg";
   active?: boolean;
 }) {
-  const a = AGENTS[agentId];
   const sizes = {
     xs: "h-9 w-9 text-[11px]",
     md: "h-12 w-12 text-sm",
@@ -478,26 +687,25 @@ function Avatar({
   };
   return (
     <div
-      className={`relative flex shrink-0 items-center justify-center rounded-full ring-2 font-display font-medium ${sizes[size]} ${a.bg} ${a.accent} ${
+      className={`relative flex shrink-0 items-center justify-center rounded-full ring-2 font-display font-medium ${sizes[size]} ${agent.bg} ${agent.accent} ${
         active ? "shadow-xl" : ""
       }`}
     >
-      {a.initials}
+      {agent.initials}
     </div>
   );
 }
 
 function SpeechBubble({
   children,
-  agentId,
+  agent,
 }: {
   children: React.ReactNode;
-  agentId: AgentId;
+  agent: AgentResolved;
 }) {
-  const a = AGENTS[agentId];
   return (
     <div
-      className={`relative max-w-3xl rounded-2xl rounded-tl-sm border-l-2 bg-white/90 p-5 text-base leading-relaxed text-zinc-800 shadow-sm backdrop-blur ${a.accent.replace("text-", "border-l-").replace("ring-", "")}`}
+      className={`relative max-w-3xl rounded-2xl rounded-tl-sm border-l-2 bg-white/90 p-5 text-base leading-relaxed text-zinc-800 shadow-sm backdrop-blur ${agent.accent.replace("text-", "border-l-").replace("ring-", "")}`}
     >
       {children}
     </div>

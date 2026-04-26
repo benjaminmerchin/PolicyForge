@@ -88,6 +88,11 @@ export default function Landing() {
               <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 live-dot text-emerald-500" />
               CABINET — IN SESSION
             </Badge>
+            <Link href="/cabinet">
+              <Button size="sm" variant="ghost">
+                Cabinet
+              </Button>
+            </Link>
             <Link href="/feed">
               <Button size="sm" variant="ghost">
                 Sessions

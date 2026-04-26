@@ -12,6 +12,32 @@ export type DebateRow = {
   error_message: string | null;
   created_at: string;
   finished_at: string | null;
+  cabinet_id: string | null;
+};
+
+export type CabinetMemberOverride = {
+  name: string;
+  title: string;
+  initials: string;
+};
+
+export type CabinetMembers = {
+  [agentId: string]: CabinetMemberOverride | undefined;
+};
+
+export type CabinetRow = {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string | null;
+  description: string | null;
+  lens: string;
+  parent_id: string | null;
+  is_preset: boolean;
+  accent: string;
+  category: "school" | "historical" | string;
+  members: CabinetMembers | null;
+  created_at: string;
 };
 
 export type TurnRow = {

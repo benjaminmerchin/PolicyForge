@@ -1,20 +1,41 @@
 import { generateText, streamText } from "ai";
 import { zai, ZAI_MODEL } from "@/lib/zai";
 import {
-  AGENT_PROMPTS,
   AGENTS,
   DEBATE_SEQUENCE,
+  buildAgentSystemPrompt,
   type Bill,
   type DebateEvent,
 } from "@/lib/cabinet";
-import { supabaseServer } from "@/lib/supabase";
+import { supabaseServer, type CabinetRow } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  const { bill } = (await req.json()) as { bill: Bill };
+  const { bill, cabinetId } = (await req.json()) as {
+    bill: Bill;
+    cabinetId?: string | null;
+  };
   const sb = supabaseServer();
+
+  // Resolve cabinet (default to Helios if none provided).
+  let cabinet: CabinetRow | null = null;
+  if (cabinetId) {
+    const { data } = await sb.from("cabinets").select("*").eq("id", cabinetId).single();
+    if (data) cabinet = data as CabinetRow;
+  }
+  if (!cabinet) {
+    const { data } = await sb
+      .from("cabinets")
+      .select("*")
+      .eq("slug", "helios")
+      .single();
+    if (data) cabinet = data as CabinetRow;
+  }
+  const cabinetLens = cabinet?.lens ?? null;
+  const cabinetDbId = cabinet?.id ?? null;
+  const cabinetMembers = cabinet?.members ?? null;
 
   // Create debate row up front so we can stream the id back to the client.
   const { data: debateRow, error: debateErr } = await sb
@@ -24,6 +45,7 @@ export async function POST(req: Request) {
       bill_title: bill.title,
       bill_summary: bill.summary,
       status: "running",
+      cabinet_id: cabinetDbId,
     })
     .select("id")
     .single();
@@ -44,6 +66,16 @@ export async function POST(req: Request) {
       };
 
       emit({ type: "debate_id", id: debateId });
+
+      if (cabinet) {
+        emit({
+          type: "cabinet",
+          id: cabinet.id,
+          name: cabinet.name,
+          accent: cabinet.accent,
+          members: cabinet.members ?? null,
+        });
+      }
 
       const transcript: { role: string; text: string }[] = [];
 
@@ -77,7 +109,7 @@ ${turn.instruction}`;
 
           const result = streamText({
             model: zai(ZAI_MODEL),
-            system: AGENT_PROMPTS[turn.agentId],
+            system: buildAgentSystemPrompt(turn.agentId, cabinetLens, cabinetMembers),
             prompt: userPrompt,
           });
 
@@ -88,8 +120,12 @@ ${turn.instruction}`;
           }
 
           emit({ type: "turn_end" });
+          const member = cabinetMembers?.[turn.agentId];
+          const transcriptRole = member
+            ? `${member.name} (${member.title})`
+            : AGENTS[turn.agentId].role;
           transcript.push({
-            role: AGENTS[turn.agentId].role,
+            role: transcriptRole,
             text: fullText,
           });
 

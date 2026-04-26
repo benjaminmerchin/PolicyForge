@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AGENTS, type AgentId } from "@/lib/cabinet";
-import { supabaseServer, type DebateRow, type TurnRow } from "@/lib/supabase";
+import { AGENTS, resolveAgent, type AgentId, type AgentResolved } from "@/lib/cabinet";
+import { supabaseServer, type DebateRow, type TurnRow, type CabinetRow } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,16 @@ export default async function DebateReplayPage({
   }
   const debate = debateRes.data as DebateRow;
   const turns = (turnsRes.data ?? []) as TurnRow[];
+
+  let cabinet: CabinetRow | null = null;
+  if (debate.cabinet_id) {
+    const { data: c } = await sb
+      .from("cabinets")
+      .select("*")
+      .eq("id", debate.cabinet_id)
+      .single();
+    if (c) cabinet = c as CabinetRow;
+  }
 
   const decisionColor =
     debate.decision === "approve"
@@ -67,6 +77,17 @@ export default async function DebateReplayPage({
                 <span>{debate.bill_code}</span>
                 <span className="text-zinc-300">·</span>
                 <span>{formatDate(debate.created_at)}</span>
+                {cabinet && (
+                  <>
+                    <span className="text-zinc-300">·</span>
+                    <Link
+                      href={`/cabinet/${cabinet.id}`}
+                      className="text-zinc-700 hover:underline"
+                    >
+                      {cabinet.name}
+                    </Link>
+                  </>
+                )}
               </div>
               <h1 className="mt-2 font-display text-3xl tracking-tight md:text-4xl">
                 {debate.bill_title}
@@ -88,15 +109,16 @@ export default async function DebateReplayPage({
             </div>
           )}
           {turns.map((t) => {
-            const agent = AGENTS[t.agent_id as AgentId];
-            if (!agent) return null;
+            const id = t.agent_id as AgentId;
+            if (!AGENTS[id]) return null;
+            const agent = resolveAgent(id, cabinet?.members ?? null);
             return (
               <article
                 key={t.id}
                 className="rounded-2xl border border-zinc-900/10 bg-white/70 p-5 backdrop-blur"
               >
                 <div className="mb-3 flex items-center gap-3">
-                  <Avatar agentId={agent.id} />
+                  <Avatar agent={agent} />
                   <div className="flex-1">
                     <div className="font-display text-xl text-zinc-900">{agent.name}</div>
                     <div className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
@@ -169,13 +191,12 @@ export default async function DebateReplayPage({
   );
 }
 
-function Avatar({ agentId }: { agentId: AgentId }) {
-  const a = AGENTS[agentId];
+function Avatar({ agent }: { agent: AgentResolved }) {
   return (
     <div
-      className={`flex h-12 w-12 items-center justify-center rounded-full ring-2 font-display text-sm font-medium ${a.bg} ${a.accent}`}
+      className={`flex h-12 w-12 items-center justify-center rounded-full ring-2 font-display text-sm font-medium ${agent.bg} ${agent.accent}`}
     >
-      {a.initials}
+      {agent.initials}
     </div>
   );
 }
