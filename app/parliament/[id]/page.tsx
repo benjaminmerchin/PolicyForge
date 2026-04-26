@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AGENTS, type AgentId } from "@/lib/cabinet";
-import { supabaseServer } from "@/lib/supabase";
+import { supabaseServer, type DebateRow, type TurnRow } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +24,8 @@ export default async function DebateReplayPage({
   if (debateRes.error || !debateRes.data) {
     notFound();
   }
-  const debate = debateRes.data;
-  const turns = turnsRes.data ?? [];
+  const debate = debateRes.data as DebateRow;
+  const turns = (turnsRes.data ?? []) as TurnRow[];
 
   const decisionColor =
     debate.decision === "approve"

@@ -24,19 +24,34 @@ export type TurnRow = {
   created_at: string;
 };
 
-export type Database = {
-  public: {
-    Tables: {
-      debates: { Row: DebateRow; Insert: Partial<DebateRow>; Update: Partial<DebateRow> };
-      turns: { Row: TurnRow; Insert: Partial<TurnRow>; Update: Partial<TurnRow> };
-    };
-  };
+export type DebateInsert = {
+  bill_code: string;
+  bill_title: string;
+  bill_summary: string;
+  status?: "running" | "done" | "error";
+  decision?: "approve" | "reject" | "amend" | null;
+  counter_proposal?: string | null;
+  tradeoffs?: string[] | null;
+  error_message?: string | null;
+  finished_at?: string | null;
 };
 
-let serverClient: SupabaseClient<Database> | null = null;
-let browserClient: SupabaseClient<Database> | null = null;
+export type DebateUpdate = Partial<DebateInsert>;
 
-export function supabaseServer(): SupabaseClient<Database> {
+export type TurnInsert = {
+  debate_id: string;
+  idx: number;
+  agent_id: string;
+  intent: string;
+  text: string;
+};
+
+// Untyped client — we cast at call sites for safety. Avoids brittle generated-type
+// scaffolding for a hackathon project.
+let serverClient: SupabaseClient | null = null;
+let browserClient: SupabaseClient | null = null;
+
+export function supabaseServer(): SupabaseClient {
   if (serverClient) return serverClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
@@ -45,13 +60,13 @@ export function supabaseServer(): SupabaseClient<Database> {
       "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY in env."
     );
   }
-  serverClient = createClient<Database>(url, key, {
+  serverClient = createClient(url, key, {
     auth: { persistSession: false },
   });
   return serverClient;
 }
 
-export function supabaseBrowser(): SupabaseClient<Database> {
+export function supabaseBrowser(): SupabaseClient {
   if (browserClient) return browserClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -60,7 +75,7 @@ export function supabaseBrowser(): SupabaseClient<Database> {
       "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in env."
     );
   }
-  browserClient = createClient<Database>(url, key, {
+  browserClient = createClient(url, key, {
     auth: { persistSession: false },
   });
   return browserClient;

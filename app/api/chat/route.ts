@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const result = streamText({
     model: zai(ZAI_MODEL),
     system: SYSTEM_PROMPT,
-    messages: convertToModelMessages(messages),
+    messages: await convertToModelMessages(messages),
   });
 
   return result.toUIMessageStreamResponse();

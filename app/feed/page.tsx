@@ -2,17 +2,18 @@ import Link from "next/link";
 import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { supabaseServer } from "@/lib/supabase";
+import { supabaseServer, type DebateRow } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
   const sb = supabaseServer();
-  const { data: debates, error } = await sb
+  const { data, error } = await sb
     .from("debates")
     .select("*")
     .order("created_at", { ascending: false })
     .limit(50);
+  const debates = (data ?? []) as DebateRow[];
 
   return (
     <div className="relative min-h-screen bg-[#fafaf7] text-zinc-900">
@@ -56,7 +57,7 @@ export default async function FeedPage() {
           </div>
         )}
 
-        {!error && (!debates || debates.length === 0) && (
+        {!error && debates.length === 0 && (
           <div className="rounded-2xl border border-dashed border-zinc-900/15 bg-white/40 p-12 text-center backdrop-blur">
             <p className="font-display text-2xl text-zinc-700">No sessions yet.</p>
             <p className="mt-2 text-sm text-zinc-500">
@@ -69,7 +70,7 @@ export default async function FeedPage() {
         )}
 
         <div className="grid gap-3">
-          {debates?.map((d) => {
+          {debates.map((d) => {
             const decisionColor =
               d.decision === "approve"
                 ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"

@@ -123,10 +123,12 @@ export default function ParliamentPage() {
             };
             setActive(cur);
           } else if (event.type === "delta" && cur) {
-            cur = { ...cur, text: cur.text + event.text };
-            setActive(cur);
+            const c: ActiveTurn = cur;
+            const next: ActiveTurn = { ...c, text: c.text + event.text };
+            cur = next;
+            setActive(next);
           } else if (event.type === "turn_end" && cur) {
-            const completed: CompletedTurn = { ...cur };
+            const completed: CompletedTurn = { ...(cur as ActiveTurn) };
             setTurns((prev) => [...prev, completed]);
             setActive(null);
             cur = null;
