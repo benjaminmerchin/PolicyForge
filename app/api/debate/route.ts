@@ -1,11 +1,12 @@
 import { generateText, streamText } from "ai";
-import { zai, ZAI_MODEL } from "@/lib/zai";
+import { zai, pickModel, type Speed } from "@/lib/zai";
 import {
   AGENTS,
-  DEBATE_SEQUENCE,
+  DEBATE_PRESETS,
   buildAgentSystemPrompt,
   type Bill,
   type DebateEvent,
+  type DebateLength,
 } from "@/lib/cabinet";
 import { supabaseServer, type CabinetRow } from "@/lib/supabase";
 
@@ -13,10 +14,16 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  const { bill, cabinetId } = (await req.json()) as {
+  const { bill, cabinetId, length, speed } = (await req.json()) as {
     bill: Bill;
     cabinetId?: string | null;
+    length?: DebateLength;
+    speed?: Speed;
   };
+  const sequence =
+    DEBATE_PRESETS[length ?? "standard"]?.sequence ??
+    DEBATE_PRESETS.standard.sequence;
+  const model = pickModel(speed);
   const sb = supabaseServer();
 
   // Resolve cabinet (default to Helios if none provided).
@@ -85,8 +92,8 @@ Code: ${bill.code}
 Summary: ${bill.summary}`;
 
       try {
-        for (let i = 0; i < DEBATE_SEQUENCE.length; i++) {
-          const turn = DEBATE_SEQUENCE[i];
+        for (let i = 0; i < sequence.length; i++) {
+          const turn = sequence[i];
           emit({
             type: "turn_start",
             agentId: turn.agentId,
@@ -108,7 +115,7 @@ YOUR TURN — ${turn.intent.toUpperCase()}:
 ${turn.instruction}`;
 
           const result = streamText({
-            model: zai(ZAI_MODEL),
+            model: zai(model),
             system: buildAgentSystemPrompt(turn.agentId, cabinetLens, cabinetMembers),
             prompt: userPrompt,
           });
@@ -147,12 +154,18 @@ ${transcript.map((t) => `${t.role}: ${t.text}`).join("\n\n")}
 Output ONLY a JSON object (no markdown fences, no commentary). Schema:
 {
   "decision": "approve" | "reject" | "amend",
-  "counterProposal": "1-2 sentence concrete counter-proposal that captures the cabinet's position. Include any specific numbers, thresholds, or mechanisms mentioned.",
+  "headline": "ONE punchy sentence (15-25 words) summarizing the cabinet's verdict. Tweet-length, citation-worthy. Active voice.",
+  "counterProposal": "1-2 sentence concrete counter-proposal capturing the cabinet's position.",
+  "amendments": ["3-5 concrete numbered changes the cabinet wants. Each item: one specific change, 1 sentence. Include numbers/thresholds/mechanisms when raised."],
+  "winners": ["2-4 short stakeholder groups that benefit from the cabinet's position (e.g. 'Mid-cap manufacturers', 'Displaced workers in the Midwest')."],
+  "losers": ["2-4 short stakeholder groups that lose from the cabinet's position. Be honest."],
+  "numbers": ["2-4 quantitative claims raised IN THE DEBATE (do not invent — pull from minister statements). Format: short statement with the number, e.g. 'Surcharge raises ~$11.4B/year'. If no numbers were raised, return []."],
+  "dissent": "ONE sentence describing whether the cabinet was unified or had a sharp internal split, AND whether the Opposition Shadow scored any point worth flagging. Null only if the debate was fully unanimous and Opposition was unconvincing.",
   "tradeoffs": ["3-5 short bullet points naming the cost or risk of the cabinet's position. Be honest about what's lost."]
 }`;
 
         const verdictResult = await generateText({
-          model: zai(ZAI_MODEL),
+          model: zai(model),
           system:
             "You are a precise legislative recorder. You output only valid JSON. No markdown. No prose outside the JSON object.",
           prompt: verdictPrompt,
@@ -168,6 +181,12 @@ Output ONLY a JSON object (no markdown fences, no commentary). Schema:
               decision: verdict.decision,
               counter_proposal: verdict.counterProposal,
               tradeoffs: verdict.tradeoffs,
+              headline: verdict.headline,
+              amendments: verdict.amendments,
+              winners: verdict.winners,
+              losers: verdict.losers,
+              numbers: verdict.numbers,
+              dissent: verdict.dissent,
               finished_at: new Date().toISOString(),
             })
             .eq("id", debateId);
@@ -212,7 +231,13 @@ Output ONLY a JSON object (no markdown fences, no commentary). Schema:
 
 function parseVerdict(raw: string): {
   decision: "approve" | "reject" | "amend";
+  headline: string;
   counterProposal: string;
+  amendments: string[];
+  winners: string[];
+  losers: string[];
+  numbers: string[];
+  dissent: string | null;
   tradeoffs: string[];
 } | null {
   const trimmed = raw
@@ -228,18 +253,30 @@ function parseVerdict(raw: string): {
   try {
     const obj = JSON.parse(slice);
     if (
-      typeof obj?.decision === "string" &&
-      ["approve", "reject", "amend"].includes(obj.decision) &&
-      typeof obj?.counterProposal === "string" &&
-      Array.isArray(obj?.tradeoffs)
+      typeof obj?.decision !== "string" ||
+      !["approve", "reject", "amend"].includes(obj.decision) ||
+      typeof obj?.counterProposal !== "string" ||
+      !Array.isArray(obj?.tradeoffs)
     ) {
-      return {
-        decision: obj.decision,
-        counterProposal: obj.counterProposal,
-        tradeoffs: obj.tradeoffs.map((t: unknown) => String(t)),
-      };
+      return null;
     }
-    return null;
+    const arr = (v: unknown): string[] =>
+      Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : [];
+    const dissent =
+      typeof obj.dissent === "string" && obj.dissent.trim().length > 0
+        ? obj.dissent
+        : null;
+    return {
+      decision: obj.decision,
+      headline: typeof obj.headline === "string" ? obj.headline : "",
+      counterProposal: obj.counterProposal,
+      amendments: arr(obj.amendments),
+      winners: arr(obj.winners),
+      losers: arr(obj.losers),
+      numbers: arr(obj.numbers),
+      dissent,
+      tradeoffs: arr(obj.tradeoffs),
+    };
   } catch {
     return null;
   }

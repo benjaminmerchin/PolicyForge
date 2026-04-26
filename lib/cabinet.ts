@@ -247,7 +247,7 @@ export type DebateStep = {
   instruction: string;
 };
 
-export const DEBATE_SEQUENCE: DebateStep[] = [
+export const STANDARD_SEQUENCE: DebateStep[] = [
   {
     agentId: "pm",
     intent: "open",
@@ -310,6 +310,104 @@ export const DEBATE_SEQUENCE: DebateStep[] = [
   },
 ];
 
+export const QUICK_SEQUENCE: DebateStep[] = [
+  {
+    agentId: "pm",
+    intent: "open",
+    instruction:
+      "Open quickly. Restate the bill in one sentence. Name the single core question the cabinet must answer. 50-70 words.",
+  },
+  {
+    agentId: "economy",
+    intent: "challenge",
+    instruction:
+      "Sharpest economic critique in one paragraph. Spot the main loophole or fiscal weakness. Quantify if possible. 70-100 words.",
+  },
+  {
+    agentId: "justice",
+    intent: "challenge",
+    instruction:
+      "Sharpest legal/rights critique in one paragraph. Name the specific mechanism that's broken. 70-100 words.",
+  },
+  {
+    agentId: "opposition",
+    intent: "challenge",
+    instruction:
+      "Reject the cabinet's whole frame. One paragraph, sharp. 70-100 words.",
+  },
+  {
+    agentId: "pm",
+    intent: "synthesize",
+    instruction:
+      "Synthesize and call the vote. Name the verdict (approve / reject / amend) and the 1-2 conditions that define it. 80-100 words.",
+  },
+];
+
+export const DEEP_SEQUENCE: DebateStep[] = [
+  ...STANDARD_SEQUENCE.slice(0, 7),
+  {
+    agentId: "tech",
+    intent: "amend",
+    instruction:
+      "Propose ONE concrete implementation-side amendment that fixes the operational friction you spotted. 70-100 words.",
+  },
+  {
+    agentId: "economy",
+    intent: "amend",
+    instruction:
+      "Propose ONE concrete amendment to fix the loophole you identified. Numbers and mechanisms. 70-100 words.",
+  },
+  {
+    agentId: "justice",
+    intent: "amend",
+    instruction:
+      "Propose ONE concrete legal/procedural amendment (appeals process, burden-of-proof shift, sunset clause). 70-100 words.",
+  },
+  {
+    agentId: "ecology",
+    intent: "amend",
+    instruction:
+      "Add a 30-year-horizon clause: a sunset, review trigger, or path-dependency safeguard. 60-90 words.",
+  },
+  {
+    agentId: "citizen",
+    intent: "challenge",
+    instruction:
+      "Three NEW personas (different from earlier). Surface friction nobody has named yet. One line per persona. 60-100 words.",
+  },
+  {
+    agentId: "opposition",
+    intent: "challenge",
+    instruction:
+      "Final rebuttal. Reject the cabinet's amendments as cosmetic. Name what the cabinet still gets wrong. 70-100 words.",
+  },
+  {
+    agentId: "pm",
+    intent: "synthesize",
+    instruction:
+      "Synthesize the full cabinet position. Name the verdict (approve / reject / amend) and the 3-4 conditions that define it. Call the vote. 100-140 words.",
+  },
+];
+
+/** Backwards-compatible alias. */
+export const DEBATE_SEQUENCE = STANDARD_SEQUENCE;
+
+export type DebateLength = "quick" | "standard" | "deep";
+
+export const DEBATE_PRESETS: Record<
+  DebateLength,
+  { sequence: DebateStep[]; label: string; etaSeconds: number; warning?: string }
+> = {
+  quick: { sequence: QUICK_SEQUENCE, label: "Quick", etaSeconds: 110 },
+  standard: { sequence: STANDARD_SEQUENCE, label: "Standard", etaSeconds: 220 },
+  deep: {
+    sequence: DEEP_SEQUENCE,
+    label: "Deep",
+    etaSeconds: 330,
+    warning: "May approach Vercel's 5-min function timeout in production.",
+  },
+};
+
 export type DebateEvent =
   | {
       type: "cabinet";
@@ -324,7 +422,13 @@ export type DebateEvent =
   | {
       type: "verdict";
       decision: "approve" | "reject" | "amend";
+      headline: string;
       counterProposal: string;
+      amendments: string[];
+      winners: string[];
+      losers: string[];
+      numbers: string[];
+      dissent: string | null;
       tradeoffs: string[];
     }
   | { type: "error"; message: string }

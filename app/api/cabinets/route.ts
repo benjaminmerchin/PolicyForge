@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase";
+import { supabaseServer, type CabinetMembers } from "@/lib/supabase";
 
 export const runtime = "nodejs";
+
+const ROLE_KEYS = ["pm", "economy", "justice", "ecology", "tech"] as const;
 
 export async function POST(req: Request) {
   const body = (await req.json()) as {
@@ -11,6 +13,7 @@ export async function POST(req: Request) {
     lens?: string;
     parentId?: string | null;
     accent?: string;
+    members?: Record<string, { name?: string; title?: string; initials?: string } | null>;
   };
 
   const name = body.name?.trim();
@@ -20,6 +23,32 @@ export async function POST(req: Request) {
       { error: "Name and lens are required." },
       { status: 400 }
     );
+  }
+
+  // Validate members: a role is included only if all three fields (name, title, initials)
+  // are filled. If any field is filled but not all three, reject.
+  const members: CabinetMembers = {};
+  if (body.members) {
+    for (const role of ROLE_KEYS) {
+      const m = body.members[role];
+      if (!m) continue;
+      const n = m.name?.trim();
+      const t = m.title?.trim();
+      const i = m.initials?.trim();
+      const anyFilled = Boolean(n || t || i);
+      const allFilled = Boolean(n && t && i);
+      if (anyFilled && !allFilled) {
+        return NextResponse.json(
+          {
+            error: `Member ${role}: name, title, and initials must all be filled (or all empty).`,
+          },
+          { status: 400 }
+        );
+      }
+      if (allFilled) {
+        members[role] = { name: n!, title: t!, initials: i! };
+      }
+    }
   }
 
   const slug =
@@ -39,6 +68,7 @@ export async function POST(req: Request) {
       parent_id: body.parentId || null,
       is_preset: false,
       accent: body.accent || "violet",
+      members: Object.keys(members).length > 0 ? members : null,
     })
     .select("*")
     .single();

@@ -6,8 +6,23 @@ import { Suspense, useEffect, useState } from "react";
 import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { supabaseBrowser, type CabinetRow } from "@/lib/supabase";
+import { AGENTS } from "@/lib/cabinet";
 
 const ACCENTS = ["violet", "amber", "emerald", "cyan", "lime", "rose", "blue", "zinc"];
+
+type RoleKey = "pm" | "economy" | "justice" | "ecology" | "tech";
+const ROLE_KEYS: RoleKey[] = ["pm", "economy", "justice", "ecology", "tech"];
+
+type MemberDraft = { name: string; title: string; initials: string };
+type MembersDraft = Record<RoleKey, MemberDraft>;
+
+const EMPTY_MEMBERS: MembersDraft = {
+  pm: { name: "", title: "", initials: "" },
+  economy: { name: "", title: "", initials: "" },
+  justice: { name: "", title: "", initials: "" },
+  ecology: { name: "", title: "", initials: "" },
+  tech: { name: "", title: "", initials: "" },
+};
 
 export default function NewCabinetPage() {
   return (
@@ -28,6 +43,7 @@ function NewCabinetForm() {
   const [description, setDescription] = useState("");
   const [lens, setLens] = useState("");
   const [accent, setAccent] = useState("violet");
+  const [members, setMembers] = useState<MembersDraft>(EMPTY_MEMBERS);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,9 +63,24 @@ function NewCabinetForm() {
         setDescription(c.description ?? "");
         setLens(c.lens);
         setAccent(c.accent);
+        if (c.members) {
+          const next: MembersDraft = { ...EMPTY_MEMBERS };
+          for (const role of ROLE_KEYS) {
+            const m = c.members[role];
+            if (m) next[role] = { name: m.name, title: m.title, initials: m.initials };
+          }
+          setMembers(next);
+        }
       }
     })();
   }, [forkId]);
+
+  const updateMember = (role: RoleKey, field: keyof MemberDraft, value: string) => {
+    setMembers((prev) => ({
+      ...prev,
+      [role]: { ...prev[role], [field]: value },
+    }));
+  };
 
   const submit = async () => {
     setError(null);
@@ -57,6 +88,18 @@ function NewCabinetForm() {
       setError("Name and lens are required.");
       return;
     }
+    // Validate members: each role must be either fully filled or fully empty.
+    for (const role of ROLE_KEYS) {
+      const m = members[role];
+      const filled = [m.name.trim(), m.title.trim(), m.initials.trim()].filter(Boolean);
+      if (filled.length > 0 && filled.length < 3) {
+        setError(
+          `Member ${role}: fill all three fields (name, title, initials) — or leave all empty to use the default archetype.`
+        );
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const res = await fetch("/api/cabinets", {
@@ -69,6 +112,7 @@ function NewCabinetForm() {
           lens: lens.trim(),
           parentId: forkId || null,
           accent,
+          members,
         }),
       });
       const json = await res.json();
@@ -168,6 +212,65 @@ function NewCabinetForm() {
               ))}
             </div>
           </Field>
+
+          <div className="rounded-2xl border border-zinc-900/10 bg-white/40 p-5 backdrop-blur">
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-700">
+                Members (optional)
+              </span>
+              <span className="text-xs text-zinc-500">
+                Leave blank to use default archetypes
+              </span>
+            </div>
+            <p className="mb-4 text-xs text-zinc-500">
+              Fill in real names, titles, and initials for each role to make this cabinet
+              concrete. Opposition Shadow and Citizen Simulator stay cabinet-agnostic.
+            </p>
+            <div className="space-y-3">
+              {ROLE_KEYS.map((role) => {
+                const archetype = AGENTS[role];
+                const m = members[role];
+                return (
+                  <div
+                    key={role}
+                    className="grid grid-cols-12 gap-2 rounded-lg border border-zinc-900/10 bg-white p-3"
+                  >
+                    <div className="col-span-12 flex items-baseline justify-between gap-2 sm:col-span-3">
+                      <div>
+                        <div className="text-sm font-medium text-zinc-900">
+                          {archetype.role}
+                        </div>
+                        <div className="text-[10px] text-zinc-500">
+                          default: {archetype.name}
+                        </div>
+                      </div>
+                    </div>
+                    <input
+                      value={m.name}
+                      onChange={(e) => updateMember(role, "name", e.target.value)}
+                      placeholder="Name"
+                      className="col-span-12 rounded-md border border-zinc-900/10 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-900/30 sm:col-span-5"
+                    />
+                    <input
+                      value={m.title}
+                      onChange={(e) => updateMember(role, "title", e.target.value)}
+                      placeholder="Title"
+                      className="col-span-7 rounded-md border border-zinc-900/10 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-zinc-900/30 sm:col-span-3"
+                    />
+                    <input
+                      value={m.initials}
+                      onChange={(e) =>
+                        updateMember(role, "initials", e.target.value.toUpperCase())
+                      }
+                      maxLength={3}
+                      placeholder="AB"
+                      className="col-span-5 rounded-md border border-zinc-900/10 bg-white px-2.5 py-1.5 text-center font-mono text-sm uppercase outline-none focus:border-zinc-900/30 sm:col-span-1"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {error && (

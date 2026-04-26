@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 import {
   AGENTS,
   AGENT_ORDER,
-  DEBATE_SEQUENCE,
+  DEBATE_PRESETS,
   SAMPLE_BILLS,
   resolveAgent,
   type AgentId,
@@ -17,6 +17,7 @@ import {
   type Bill,
   type CabinetMembersMap,
   type DebateEvent,
+  type DebateLength,
 } from "@/lib/cabinet";
 import { supabaseBrowser, type CabinetRow } from "@/lib/supabase";
 
@@ -49,7 +50,13 @@ type ActiveTurn = {
 
 type Verdict = {
   decision: "approve" | "reject" | "amend";
+  headline: string;
   counterProposal: string;
+  amendments: string[];
+  winners: string[];
+  losers: string[];
+  numbers: string[];
+  dissent: string | null;
   tradeoffs: string[];
 };
 
@@ -83,6 +90,8 @@ function ParliamentInner() {
   const [cabinets, setCabinets] = useState<CabinetRow[]>([]);
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null);
   const [activeMembers, setActiveMembers] = useState<CabinetMembersMap | null>(null);
+  const [length, setLength] = useState<DebateLength>("standard");
+  const [fast, setFast] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   // Load cabinets and resolve selection
@@ -108,11 +117,11 @@ function ParliamentInner() {
   const selectedCabinet =
     cabinets.find((c) => c.id === selectedCabinetId) ?? null;
 
-  // Members for rendering: while running we trust the server stream's payload;
-  // before/after running we use the picker selection so the bench reflects the
-  // chosen cabinet immediately.
+  // The picker is the source of truth — the bench should reflect the selected
+  // cabinet immediately, even before a debate starts. activeMembers is only a
+  // fallback for the rare case where the picker hasn't loaded yet.
   const renderMembers: CabinetMembersMap | null =
-    activeMembers ?? selectedCabinet?.members ?? null;
+    selectedCabinet?.members ?? activeMembers ?? null;
 
   const resolve = (id: AgentId): AgentResolved => resolveAgent(id, renderMembers);
 
@@ -127,7 +136,7 @@ function ParliamentInner() {
 
   const activeBill: Bill = mode === "custom" && customBill ? customBill : bill;
 
-  const total = DEBATE_SEQUENCE.length;
+  const total = DEBATE_PRESETS[length].sequence.length;
   const turnIdx = active?.index ?? Math.max(turns.length - 1, 0);
   const progress =
     status === "done"
@@ -160,7 +169,12 @@ function ParliamentInner() {
       const res = await fetch("/api/debate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bill: b, cabinetId: selectedCabinetId }),
+        body: JSON.stringify({
+          bill: b,
+          cabinetId: selectedCabinetId,
+          length,
+          speed: fast ? "fast" : "quality",
+        }),
         signal: ac.signal,
       });
       if (!res.ok || !res.body) {
@@ -214,7 +228,13 @@ function ParliamentInner() {
           } else if (event.type === "verdict") {
             setVerdict({
               decision: event.decision,
+              headline: event.headline,
               counterProposal: event.counterProposal,
+              amendments: event.amendments,
+              winners: event.winners,
+              losers: event.losers,
+              numbers: event.numbers,
+              dissent: event.dissent,
               tradeoffs: event.tradeoffs,
             });
           } else if (event.type === "error") {
@@ -442,10 +462,10 @@ function ParliamentInner() {
                     }`}
                   >
                     <span className="font-medium">{c.name}</span>
-                    {c.tagline && !selected && (
+                    {c.tagline && (
                       <span className="opacity-70">— {c.tagline}</span>
                     )}
-                    {!c.is_preset && selected && (
+                    {!c.is_preset && (
                       <span className="opacity-70">(forked)</span>
                     )}
                   </button>
@@ -459,10 +479,60 @@ function ParliamentInner() {
             )}
           </div>
 
-          {/* Action row */}
-          <div className="mt-5 flex flex-wrap items-center gap-2">
+          {/* Length picker + Action row */}
+          <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-zinc-900/10 pt-4">
+            <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+              Debate length
+            </span>
+            <div className="flex items-center gap-1 rounded-full border border-zinc-900/10 bg-zinc-900/[0.03] p-1">
+              {(["quick", "standard", "deep"] as DebateLength[]).map((l) => {
+                const preset = DEBATE_PRESETS[l];
+                const selected = length === l;
+                return (
+                  <button
+                    key={l}
+                    onClick={() => setLength(l)}
+                    disabled={status === "running"}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      selected
+                        ? "bg-zinc-900 text-white"
+                        : "text-zinc-600 hover:text-zinc-900"
+                    }`}
+                    title={`${preset.sequence.length} turns · ~${formatEta(preset.etaSeconds)}${preset.warning ? ` — ${preset.warning}` : ""}`}
+                  >
+                    {preset.label}{" "}
+                    <span className="opacity-60">
+                      ({preset.sequence.length})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <span className="font-mono text-[11px] text-zinc-400">
+              ~{formatEta(Math.round(DEBATE_PRESETS[length].etaSeconds * (fast ? 0.4 : 1)))}
+            </span>
+
+            <button
+              onClick={() => setFast((f) => !f)}
+              disabled={status === "running"}
+              title="Switches the model to GLM-5-Turbo — much faster, slightly less reasoning depth"
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
+                fast
+                  ? "border-amber-600/40 bg-amber-500/10 text-amber-700"
+                  : "border-zinc-900/10 bg-white text-zinc-600 hover:border-zinc-900/20"
+              }`}
+            >
+              ⚡ Fast {fast && <span className="opacity-60">(GLM-5-Turbo)</span>}
+            </button>
+
+            {DEBATE_PRESETS[length].warning && !fast && (
+              <span className="font-mono text-[11px] text-amber-700">
+                ⚠ {DEBATE_PRESETS[length].warning}
+              </span>
+            )}
+
             {debateId && status === "done" && (
-              <Link href={`/parliament/${debateId}`}>
+              <Link href={`/parliament/${debateId}`} className="ml-auto">
                 <Button size="sm" variant="ghost">
                   ↗ Permalink
                 </Button>
@@ -476,7 +546,7 @@ function ParliamentInner() {
                 (mode === "custom" && !customBill) ||
                 cabinets.length === 0
               }
-              className="ml-auto"
+              className={debateId && status === "done" ? "" : "ml-auto"}
             >
               {status === "running"
                 ? "Cabinet in session…"
@@ -506,14 +576,32 @@ function ParliamentInner() {
               <div className="relative flex flex-col items-start gap-6 motion-fade">
                 <SpeakerHeader agent={resolve(active.agentId)} intent={active.intent} live />
                 <SpeechBubble agent={resolve(active.agentId)}>
-                  <span className="whitespace-pre-wrap">{active.text}</span>
+                  <FormattedText text={active.text} />
                   <span className="ml-1 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse bg-zinc-700 align-middle" />
                 </SpeechBubble>
               </div>
             )}
 
             {!active && verdict && (
-              <VerdictPanel verdict={verdict} />
+              <div className="space-y-5">
+                <VerdictPanel verdict={verdict} />
+                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-900/10 pt-4">
+                  {debateId && (
+                    <Link href={`/parliament/${debateId}`}>
+                      <Button size="sm" variant="ghost">
+                        ↗ Permalink
+                      </Button>
+                    </Link>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={() => startDebate(activeBill)}
+                    disabled={status === "running"}
+                  >
+                    ↻ Re-run debate
+                  </Button>
+                </div>
+              </div>
             )}
 
             {!active && !verdict && status === "running" && (
@@ -531,22 +619,22 @@ function ParliamentInner() {
             )}
           </div>
 
-          <aside className="rounded-3xl border border-zinc-900/10 bg-white/60 p-5 backdrop-blur">
+          <aside className="flex max-h-[640px] flex-col rounded-3xl border border-zinc-900/10 bg-white/60 p-5 backdrop-blur">
             <div className="mb-4 flex items-center justify-between">
               <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-                Recent
+                Transcript
               </span>
               <span className="font-mono text-[10px] text-zinc-400">
-                {turns.length} delivered · {total - turns.length} pending
+                {turns.length} delivered · {Math.max(total - turns.length, 0)} pending
               </span>
             </div>
-            <div className="space-y-3">
+            <div className="flex-1 space-y-3 overflow-y-auto pr-1">
               {turns.length === 0 && (
                 <div className="rounded-lg border border-dashed border-zinc-900/10 p-4 text-center text-xs text-zinc-400">
                   No turns yet.
                 </div>
               )}
-              {recent.map((t) => {
+              {[...turns].reverse().map((t) => {
                 const a = resolve(t.agentId);
                 return (
                   <div
@@ -563,7 +651,9 @@ function ParliamentInner() {
                           {t.intent}
                         </span>
                       </div>
-                      <p className="mt-1 line-clamp-3 text-xs text-zinc-600">{t.text}</p>
+                      <p className="mt-1 line-clamp-3 text-xs text-zinc-600">
+                        <FormattedText text={t.text} />
+                      </p>
                     </div>
                   </div>
                 );
@@ -705,18 +795,76 @@ function SpeechBubble({
 }) {
   return (
     <div
-      className={`relative max-w-3xl rounded-2xl rounded-tl-sm border-l-2 bg-white/90 p-5 text-base leading-relaxed text-zinc-800 shadow-sm backdrop-blur ${agent.accent.replace("text-", "border-l-").replace("ring-", "")}`}
+      className={`relative w-full max-w-3xl rounded-2xl rounded-tl-sm border-l-2 bg-white/90 p-5 text-base leading-relaxed text-zinc-800 shadow-sm backdrop-blur min-h-[120px] ${agent.accent.replace("text-", "border-l-").replace("ring-", "")}`}
     >
       {children}
     </div>
   );
 }
 
+function formatEta(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s === 0 ? `${m} min` : `${m} min ${s}s`;
+}
+
 function VerdictPanel({ verdict }: { verdict: Verdict }) {
+  return <VerdictView v={verdict} />;
+}
+
+/**
+ * Light markdown renderer: handles **bold** and preserves line breaks.
+ * Avoids pulling a full markdown parser for one feature.
+ */
+function FormattedText({ text }: { text: string }) {
+  // Split by lines first, then by bold markers, render strong elements.
+  const lines = text.split("\n");
+  return (
+    <span className="whitespace-pre-wrap">
+      {lines.map((line, li) => (
+        <span key={li}>
+          {renderInlineBold(line)}
+          {li < lines.length - 1 && "\n"}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function renderInlineBold(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) => {
+    if (p.startsWith("**") && p.endsWith("**") && p.length > 4) {
+      return (
+        <strong key={i} className="font-semibold">
+          {p.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <span key={i}>{p}</span>;
+  });
+}
+
+function VerdictView({
+  v,
+}: {
+  v: {
+    decision: "approve" | "reject" | "amend";
+    headline: string;
+    counterProposal: string;
+    amendments: string[];
+    winners: string[];
+    losers: string[];
+    numbers: string[];
+    dissent: string | null;
+    tradeoffs: string[];
+  };
+}) {
   const decisionColor =
-    verdict.decision === "approve"
+    v.decision === "approve"
       ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
-      : verdict.decision === "reject"
+      : v.decision === "reject"
         ? "border-rose-600/30 bg-rose-500/10 text-rose-700"
         : "border-amber-600/30 bg-amber-500/10 text-amber-700";
 
@@ -730,33 +878,140 @@ function VerdictPanel({ verdict }: { verdict: Verdict }) {
           Cabinet verdict
         </Badge>
         <span className="font-display text-3xl text-zinc-900 capitalize">
-          Motion: {verdict.decision}
+          Motion: {v.decision}
         </span>
       </div>
+
+      {v.headline && (
+        <p className="font-display text-2xl leading-snug text-zinc-900">
+          &ldquo;{v.headline}&rdquo;
+        </p>
+      )}
+
       <div className="rounded-xl border border-zinc-900/10 bg-white/80 p-5">
         <div className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
           Counter-proposal
         </div>
-        <p className="mt-2 text-zinc-800">{verdict.counterProposal}</p>
+        <p className="mt-2 text-zinc-800">{v.counterProposal}</p>
       </div>
-      <div>
-        <div className="mb-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-          Trade-offs (declared)
+
+      {v.amendments.length > 0 && (
+        <VerdictList
+          label="Concrete amendments"
+          items={v.amendments}
+          numbered
+        />
+      )}
+
+      {(v.winners.length > 0 || v.losers.length > 0) && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {v.winners.length > 0 && (
+            <StakeholderBox
+              label="Winners"
+              items={v.winners}
+              tone="border-emerald-600/30 bg-emerald-500/5 text-emerald-800"
+            />
+          )}
+          {v.losers.length > 0 && (
+            <StakeholderBox
+              label="Losers"
+              items={v.losers}
+              tone="border-rose-600/30 bg-rose-500/5 text-rose-800"
+            />
+          )}
         </div>
-        <ul className="space-y-2">
-          {verdict.tradeoffs.map((t, i) => (
-            <li
-              key={i}
-              className="flex items-start gap-2 rounded-lg border border-zinc-900/5 bg-white/70 p-3 text-sm text-zinc-700"
-            >
+      )}
+
+      {v.numbers.length > 0 && (
+        <div className="rounded-xl border border-zinc-900/10 bg-white/70 p-4">
+          <div className="mb-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+            Numbers raised in debate
+          </div>
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {v.numbers.map((n, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-2 font-mono text-xs text-zinc-700"
+              >
+                <span className="text-zinc-400">→</span>
+                <span>{n}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {v.dissent && (
+        <div className="rounded-xl border border-zinc-900/10 bg-white/60 p-4">
+          <div className="mb-1 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+            Dissent &amp; opposition
+          </div>
+          <p className="text-sm italic text-zinc-700">{v.dissent}</p>
+        </div>
+      )}
+
+      {v.tradeoffs.length > 0 && (
+        <VerdictList label="Trade-offs (declared)" items={v.tradeoffs} numbered />
+      )}
+    </div>
+  );
+}
+
+function VerdictList({
+  label,
+  items,
+  numbered,
+}: {
+  label: string;
+  items: string[];
+  numbered?: boolean;
+}) {
+  return (
+    <div>
+      <div className="mb-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+        {label}
+      </div>
+      <ul className="space-y-2">
+        {items.map((t, i) => (
+          <li
+            key={i}
+            className="flex items-start gap-2 rounded-lg border border-zinc-900/5 bg-white/70 p-3 text-sm text-zinc-700"
+          >
+            {numbered && (
               <span className="mt-1 font-mono text-[10px] text-zinc-400">
                 {String(i + 1).padStart(2, "0")}
               </span>
-              <span>{t}</span>
-            </li>
-          ))}
-        </ul>
+            )}
+            <span>{t}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function StakeholderBox({
+  label,
+  items,
+  tone,
+}: {
+  label: string;
+  items: string[];
+  tone: string;
+}) {
+  return (
+    <div className={`rounded-xl border p-4 ${tone}`}>
+      <div className="mb-2 font-mono text-[11px] uppercase tracking-widest opacity-80">
+        {label}
       </div>
+      <ul className="space-y-1 text-sm">
+        {items.map((s, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <span className="opacity-60">·</span>
+            <span>{s}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -9,6 +9,13 @@ export type DebateRow = {
   decision: "approve" | "reject" | "amend" | null;
   counter_proposal: string | null;
   tradeoffs: string[] | null;
+  // Verdict v2 fields (nullable for legacy rows)
+  headline: string | null;
+  amendments: string[] | null;
+  winners: string[] | null;
+  losers: string[] | null;
+  numbers: string[] | null;
+  dissent: string | null;
   error_message: string | null;
   created_at: string;
   finished_at: string | null;

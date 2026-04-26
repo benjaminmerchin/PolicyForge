@@ -121,10 +121,16 @@ export default async function FeedPage() {
                     <div className="mt-1 font-display text-2xl text-zinc-900 group-hover:underline">
                       {d.bill_title}
                     </div>
-                    {d.counter_proposal && (
-                      <p className="mt-2 line-clamp-2 text-sm text-zinc-600">
-                        {d.counter_proposal}
+                    {d.headline ? (
+                      <p className="mt-2 line-clamp-2 text-sm italic text-zinc-700">
+                        &ldquo;{d.headline}&rdquo;
                       </p>
+                    ) : (
+                      d.counter_proposal && (
+                        <p className="mt-2 line-clamp-2 text-sm text-zinc-600">
+                          {d.counter_proposal}
+                        </p>
+                      )
                     )}
                   </div>
                   <Badge variant="outline" className={`shrink-0 ${decisionColor}`}>

@@ -132,7 +132,7 @@ export default async function DebateReplayPage({
                 <p
                   className={`whitespace-pre-wrap rounded-xl border-l-2 bg-white/90 p-4 text-sm leading-relaxed text-zinc-800 ${agent.accent.replace("text-", "border-l-").replace("ring-", "")}`}
                 >
-                  {t.text}
+                  <FormattedText text={t.text} />
                 </p>
               </article>
             );
@@ -152,31 +152,74 @@ export default async function DebateReplayPage({
                 Motion: {debate.decision}
               </span>
             </div>
+
+            {debate.headline && (
+              <p className="mt-4 font-display text-2xl leading-snug text-zinc-900">
+                &ldquo;{debate.headline}&rdquo;
+              </p>
+            )}
+
             <div className="mt-5 rounded-xl border border-zinc-900/10 bg-white/80 p-5">
               <div className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
                 Counter-proposal
               </div>
               <p className="mt-2 text-zinc-800">{debate.counter_proposal}</p>
             </div>
-            {debate.tradeoffs && debate.tradeoffs.length > 0 && (
-              <div className="mt-5">
+
+            {debate.amendments && debate.amendments.length > 0 && (
+              <ListBlock
+                label="Concrete amendments"
+                items={debate.amendments}
+                numbered
+              />
+            )}
+
+            {(debate.winners?.length || debate.losers?.length) && (
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {debate.winners && debate.winners.length > 0 && (
+                  <StakeholderBox
+                    label="Winners"
+                    items={debate.winners}
+                    tone="border-emerald-600/30 bg-emerald-500/5 text-emerald-800"
+                  />
+                )}
+                {debate.losers && debate.losers.length > 0 && (
+                  <StakeholderBox
+                    label="Losers"
+                    items={debate.losers}
+                    tone="border-rose-600/30 bg-rose-500/5 text-rose-800"
+                  />
+                )}
+              </div>
+            )}
+
+            {debate.numbers && debate.numbers.length > 0 && (
+              <div className="mt-5 rounded-xl border border-zinc-900/10 bg-white/70 p-4">
                 <div className="mb-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-                  Trade-offs
+                  Numbers raised in debate
                 </div>
-                <ul className="space-y-2">
-                  {debate.tradeoffs.map((t, i) => (
-                    <li
-                      key={i}
-                      className="flex items-start gap-2 rounded-lg border border-zinc-900/5 bg-white/70 p-3 text-sm text-zinc-700"
-                    >
-                      <span className="mt-1 font-mono text-[10px] text-zinc-400">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <span>{t}</span>
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {debate.numbers.map((n, i) => (
+                    <li key={i} className="flex items-start gap-2 font-mono text-xs text-zinc-700">
+                      <span className="text-zinc-400">→</span>
+                      <span>{n}</span>
                     </li>
                   ))}
                 </ul>
               </div>
+            )}
+
+            {debate.dissent && (
+              <div className="mt-5 rounded-xl border border-zinc-900/10 bg-white/60 p-4">
+                <div className="mb-1 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+                  Dissent &amp; opposition
+                </div>
+                <p className="text-sm italic text-zinc-700">{debate.dissent}</p>
+              </div>
+            )}
+
+            {debate.tradeoffs && debate.tradeoffs.length > 0 && (
+              <ListBlock label="Trade-offs" items={debate.tradeoffs} numbered />
             )}
           </section>
         )}
@@ -197,6 +240,90 @@ function Avatar({ agent }: { agent: AgentResolved }) {
       className={`flex h-12 w-12 items-center justify-center rounded-full ring-2 font-display text-sm font-medium ${agent.bg} ${agent.accent}`}
     >
       {agent.initials}
+    </div>
+  );
+}
+
+function FormattedText({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <span className="whitespace-pre-wrap">
+      {lines.map((line, li) => {
+        const parts = line.split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <span key={li}>
+            {parts.map((p, i) =>
+              p.startsWith("**") && p.endsWith("**") && p.length > 4 ? (
+                <strong key={i} className="font-semibold">
+                  {p.slice(2, -2)}
+                </strong>
+              ) : (
+                <span key={i}>{p}</span>
+              )
+            )}
+            {li < lines.length - 1 && "\n"}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function ListBlock({
+  label,
+  items,
+  numbered,
+}: {
+  label: string;
+  items: string[];
+  numbered?: boolean;
+}) {
+  return (
+    <div className="mt-5">
+      <div className="mb-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+        {label}
+      </div>
+      <ul className="space-y-2">
+        {items.map((t, i) => (
+          <li
+            key={i}
+            className="flex items-start gap-2 rounded-lg border border-zinc-900/5 bg-white/70 p-3 text-sm text-zinc-700"
+          >
+            {numbered && (
+              <span className="mt-1 font-mono text-[10px] text-zinc-400">
+                {String(i + 1).padStart(2, "0")}
+              </span>
+            )}
+            <span>{t}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function StakeholderBox({
+  label,
+  items,
+  tone,
+}: {
+  label: string;
+  items: string[];
+  tone: string;
+}) {
+  return (
+    <div className={`rounded-xl border p-4 ${tone}`}>
+      <div className="mb-2 font-mono text-[11px] uppercase tracking-widest opacity-80">
+        {label}
+      </div>
+      <ul className="space-y-1 text-sm">
+        {items.map((s, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <span className="opacity-60">·</span>
+            <span>{s}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
