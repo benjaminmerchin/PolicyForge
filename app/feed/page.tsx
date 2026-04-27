@@ -26,6 +26,7 @@ export default async function FeedPage() {
   const { data, error } = await sb
     .from("debates")
     .select("*")
+    .neq("status", "error")
     .order("created_at", { ascending: false })
     .limit(50);
   const debates = (data ?? []) as DebateRow[];
@@ -151,10 +152,13 @@ export default async function FeedPage() {
 
 function formatDate(iso: string) {
   const d = new Date(iso);
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
+    hour12: true,
+    timeZone: "America/Los_Angeles",
+    timeZoneName: "short",
   });
 }
