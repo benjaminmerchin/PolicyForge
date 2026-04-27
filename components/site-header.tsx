@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 const NAV_LINKS = [
+  { href: "/bills", label: "Bills" },
   { href: "/cabinet", label: "Cabinets" },
   { href: "/feed", label: "Sessions" },
   { href: "/features", label: "Features" },

@@ -92,7 +92,38 @@ function ParliamentInner() {
   const [activeMembers, setActiveMembers] = useState<CabinetMembersMap | null>(null);
   const [length, setLength] = useState<DebateLength>("standard");
   const [fast, setFast] = useState(true);
+  const [billLoading, setBillLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Prefill from a Congress.gov bill slug if present in the URL
+  const requestedBillSlug = search.get("bill");
+  useEffect(() => {
+    if (!requestedBillSlug) return;
+    let cancelled = false;
+    setBillLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(`/api/bills/${encodeURIComponent(requestedBillSlug)}`);
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          bill?: { code: string; title: string; summary: string };
+        };
+        if (!cancelled && json.bill) {
+          setMode("custom");
+          setCustomCode(json.bill.code);
+          setCustomTitle(json.bill.title);
+          setCustomBody(json.bill.summary);
+        }
+      } catch {
+        // swallow — user can still pick a bill manually
+      } finally {
+        if (!cancelled) setBillLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedBillSlug]);
 
   // Load cabinets and resolve selection
   useEffect(() => {
