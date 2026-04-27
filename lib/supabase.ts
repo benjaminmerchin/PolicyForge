@@ -5,7 +5,7 @@ export type DebateRow = {
   bill_code: string;
   bill_title: string;
   bill_summary: string;
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "error" | "abandoned";
   decision: "approve" | "reject" | "amend" | null;
   counter_proposal: string | null;
   tradeoffs: string[] | null;

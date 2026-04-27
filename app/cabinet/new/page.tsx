@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
+import { SiteHeader } from "@/components/site-header";
 import { supabaseBrowser, type CabinetRow } from "@/lib/supabase";
 import { AGENTS } from "@/lib/cabinet";
 
@@ -131,20 +131,15 @@ function NewCabinetForm() {
       <div className="aurora opacity-50" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <Link href="/cabinet">
-            <Button size="sm" variant="ghost">
-              ← All cabinets
-            </Button>
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto max-w-3xl px-6 py-12">
+        <Link
+          href="/cabinet"
+          className="mb-4 inline-block font-mono text-[11px] uppercase tracking-widest text-zinc-500 hover:text-zinc-900"
+        >
+          ← All cabinets
+        </Link>
         <p className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
           {parent ? `Forking ${parent.name}` : "Create cabinet"}
         </p>

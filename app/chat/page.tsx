@@ -3,10 +3,8 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useState } from "react";
-import Link from "next/link";
-import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/site-header";
 
 export default function ChatPage() {
   const [input, setInput] = useState("");
@@ -21,24 +19,7 @@ export default function ChatPage() {
       <div className="aurora opacity-50" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/features">
-              <Button size="sm" variant="ghost">
-                Features
-              </Button>
-            </Link>
-            <Badge variant="outline" className="gap-1.5 border-emerald-600/30 bg-emerald-500/10 text-emerald-700">
-              <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 live-dot text-emerald-500" />
-              Cabinet active
-            </Badge>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 py-8">
         <div className="flex-1 space-y-6">

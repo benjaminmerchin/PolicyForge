@@ -1,13 +1,28 @@
 import Link from "next/link";
-import { Wordmark } from "@/components/logo";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { SiteHeader } from "@/components/site-header";
 import { supabaseServer, type DebateRow, type CabinetRow } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 export default async function FeedPage() {
   const sb = supabaseServer();
+
+  // Self-heal: if a debate has been "running" for more than 10 minutes the
+  // client almost certainly disconnected. Mark it "abandoned" so the feed
+  // doesn't claim live activity that isn't there. The partial transcript is
+  // still viewable on the permalink — just no verdict.
+  const staleCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  await sb
+    .from("debates")
+    .update({
+      status: "abandoned",
+      finished_at: new Date().toISOString(),
+    })
+    .eq("status", "running")
+    .lt("created_at", staleCutoff);
+
   const { data, error } = await sb
     .from("debates")
     .select("*")
@@ -33,23 +48,7 @@ export default async function FeedPage() {
       <div className="aurora opacity-50" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/features">
-              <Button size="sm" variant="ghost">
-                Features
-              </Button>
-            </Link>
-            <Link href="/parliament">
-              <Button size="sm">New debate →</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto max-w-6xl px-6 py-12">
         <div className="mb-10">
@@ -85,19 +84,23 @@ export default async function FeedPage() {
         <div className="grid gap-3">
           {debates.map((d) => {
             const decisionColor =
-              d.decision === "approve"
-                ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
-                : d.decision === "reject"
-                  ? "border-rose-600/30 bg-rose-500/10 text-rose-700"
-                  : d.decision === "amend"
-                    ? "border-amber-600/30 bg-amber-500/10 text-amber-700"
-                    : "border-zinc-900/15 bg-white/60 text-zinc-700";
+              d.status === "abandoned"
+                ? "border-zinc-400/30 bg-zinc-100 text-zinc-500"
+                : d.decision === "approve"
+                  ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
+                  : d.decision === "reject"
+                    ? "border-rose-600/30 bg-rose-500/10 text-rose-700"
+                    : d.decision === "amend"
+                      ? "border-amber-600/30 bg-amber-500/10 text-amber-700"
+                      : "border-zinc-900/15 bg-white/60 text-zinc-700";
             const statusLabel =
               d.status === "done"
                 ? d.decision?.toUpperCase() ?? "DONE"
                 : d.status === "running"
                   ? "RUNNING"
-                  : "ERROR";
+                  : d.status === "abandoned"
+                    ? "INTERRUPTED"
+                    : "ERROR";
             const cab = d.cabinet_id ? cabinetMap.get(d.cabinet_id) : null;
             return (
               <Link

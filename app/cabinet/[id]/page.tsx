@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/site-header";
 import {
   AGENT_ORDER,
   AGENT_PROMPTS,
@@ -60,25 +60,20 @@ export default async function CabinetDetailPage({
       <div className="aurora opacity-50" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/cabinet">
-              <Button size="sm" variant="ghost">
-                ← All cabinets
-              </Button>
-            </Link>
-            <Link href={`/parliament?cabinet=${cabinet.id}`}>
-              <Button size="sm">Convene this cabinet →</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto max-w-5xl px-6 py-10">
+        <div className="mb-6 flex items-center justify-between">
+          <Link
+            href="/cabinet"
+            className="font-mono text-[11px] uppercase tracking-widest text-zinc-500 hover:text-zinc-900"
+          >
+            ← All cabinets
+          </Link>
+          <Link href={`/parliament?cabinet=${cabinet.id}`}>
+            <Button size="sm">Convene this cabinet →</Button>
+          </Link>
+        </div>
         <section className="rounded-2xl border border-zinc-900/10 bg-white/70 p-6 backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

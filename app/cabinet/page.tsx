@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/site-header";
 import { supabaseServer, type CabinetRow } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -41,28 +41,7 @@ export default async function CabinetsListPage() {
       <div className="aurora opacity-50" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/feed">
-              <Button size="sm" variant="ghost">
-                Sessions
-              </Button>
-            </Link>
-            <Link href="/features">
-              <Button size="sm" variant="ghost">
-                Features
-              </Button>
-            </Link>
-            <Link href="/parliament">
-              <Button size="sm">Enter parliament →</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto max-w-6xl px-6 py-12">
         <div className="mb-10 flex flex-wrap items-end justify-between gap-6">

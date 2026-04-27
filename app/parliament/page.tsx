@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/site-header";
 import { useSearchParams } from "next/navigation";
 import {
   AGENTS,
@@ -91,7 +91,7 @@ function ParliamentInner() {
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null);
   const [activeMembers, setActiveMembers] = useState<CabinetMembersMap | null>(null);
   const [length, setLength] = useState<DebateLength>("standard");
-  const [fast, setFast] = useState(false);
+  const [fast, setFast] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
 
   // Load cabinets and resolve selection
@@ -262,57 +262,7 @@ function ParliamentInner() {
       <div className="aurora opacity-40" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/cabinet">
-              <Button size="sm" variant="ghost">
-                Cabinet
-              </Button>
-            </Link>
-            <Link href="/feed">
-              <Button size="sm" variant="ghost">
-                Sessions
-              </Button>
-            </Link>
-            <Link href="/features">
-              <Button size="sm" variant="ghost">
-                Features
-              </Button>
-            </Link>
-            <Badge
-              variant="outline"
-              className={`gap-1.5 font-mono text-[11px] ${
-                status === "running"
-                  ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
-                  : status === "error"
-                    ? "border-rose-600/30 bg-rose-500/10 text-rose-700"
-                    : "border-zinc-900/15 bg-white/60 text-zinc-700"
-              }`}
-            >
-              <span
-                className={`relative inline-block h-1.5 w-1.5 rounded-full ${
-                  status === "running"
-                    ? "bg-emerald-500 live-dot text-emerald-500"
-                    : status === "error"
-                      ? "bg-rose-500"
-                      : "bg-zinc-500"
-                }`}
-              />
-              {status === "running"
-                ? "DEBATING"
-                : status === "done"
-                  ? "VERDICT REACHED"
-                  : status === "error"
-                    ? "ERROR"
-                    : "IDLE"}
-            </Badge>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
         {/* Bill banner / picker */}
@@ -512,18 +462,37 @@ function ParliamentInner() {
               ~{formatEta(Math.round(DEBATE_PRESETS[length].etaSeconds * (fast ? 0.4 : 1)))}
             </span>
 
-            <button
-              onClick={() => setFast((f) => !f)}
-              disabled={status === "running"}
-              title="Switches the model to GLM-5-Turbo — much faster, slightly less reasoning depth"
-              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
-                fast
-                  ? "border-amber-600/40 bg-amber-500/10 text-amber-700"
-                  : "border-zinc-900/10 bg-white text-zinc-600 hover:border-zinc-900/20"
-              }`}
-            >
-              ⚡ Fast {fast && <span className="opacity-60">(GLM-5-Turbo)</span>}
-            </button>
+            <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+              Model
+            </span>
+            <div className="flex items-center gap-1 rounded-full border border-zinc-900/10 bg-zinc-900/[0.03] p-1">
+              <button
+                onClick={() => setFast(false)}
+                disabled={status === "running"}
+                title="GLM-5.1 — full reasoning, slower"
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  !fast
+                    ? "bg-zinc-900 text-white"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                Quality{" "}
+                <span className="opacity-60">(GLM-5.1)</span>
+              </button>
+              <button
+                onClick={() => setFast(true)}
+                disabled={status === "running"}
+                title="GLM-5-Turbo — much faster, slightly less reasoning depth"
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  fast
+                    ? "bg-zinc-900 text-white"
+                    : "text-zinc-600 hover:text-zinc-900"
+                }`}
+              >
+                ⚡ Fast{" "}
+                <span className="opacity-60">(Turbo)</span>
+              </button>
+            </div>
 
             {DEBATE_PRESETS[length].warning && !fast && (
               <span className="font-mono text-[11px] text-amber-700">
@@ -566,10 +535,15 @@ function ParliamentInner() {
         {/* Stage */}
         <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="relative min-h-[420px] overflow-hidden rounded-3xl border border-zinc-900/10 bg-white/60 p-8 backdrop-blur">
-            <div className="absolute inset-0 grid-bg opacity-50" />
+            <div className="pointer-events-none absolute inset-0 grid-bg opacity-50" />
 
             {!active && !verdict && status === "idle" && (
-              <IdleStage onStart={() => startDebate(bill)} />
+              <IdleStage
+                onStart={() => startDebate(activeBill)}
+                disabled={
+                  (mode === "custom" && !customBill) || cabinets.length === 0
+                }
+              />
             )}
 
             {active && (
@@ -710,7 +684,13 @@ function ParliamentInner() {
   );
 }
 
-function IdleStage({ onStart }: { onStart: () => void }) {
+function IdleStage({
+  onStart,
+  disabled,
+}: {
+  onStart: () => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
       <span className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
@@ -723,7 +703,7 @@ function IdleStage({ onStart }: { onStart: () => void }) {
         Pick a bill above (or any of yours) and start the debate. The seven agents will
         speak in sequence, in real time.
       </p>
-      <Button size="lg" onClick={onStart} className="mt-2">
+      <Button size="lg" onClick={onStart} disabled={disabled} className="mt-2">
         ▶  Start debate
       </Button>
     </div>

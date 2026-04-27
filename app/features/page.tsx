@@ -1,7 +1,5 @@
-import Link from "next/link";
-import { Wordmark } from "@/components/logo";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { SiteHeader } from "@/components/site-header";
 import {
   Card,
   CardContent,
@@ -55,23 +53,7 @@ export default function FeaturesPage() {
       <div className="aurora opacity-50" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/features">
-              <Button size="sm" variant="ghost">
-                Features
-              </Button>
-            </Link>
-            <Link href="/chat">
-              <Button size="sm">Address the cabinet →</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto max-w-6xl px-6 py-12">
         <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">

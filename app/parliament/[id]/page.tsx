@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Wordmark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SiteHeader } from "@/components/site-header";
 import { AGENTS, resolveAgent, type AgentId, type AgentResolved } from "@/lib/cabinet";
 import { supabaseServer, type DebateRow, type TurnRow, type CabinetRow } from "@/lib/supabase";
 
@@ -38,38 +38,30 @@ export default async function DebateReplayPage({
   }
 
   const decisionColor =
-    debate.decision === "approve"
-      ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
-      : debate.decision === "reject"
-        ? "border-rose-600/30 bg-rose-500/10 text-rose-700"
-        : debate.decision === "amend"
-          ? "border-amber-600/30 bg-amber-500/10 text-amber-700"
-          : "border-zinc-900/15 bg-white/60 text-zinc-700";
+    debate.status === "abandoned"
+      ? "border-zinc-400/30 bg-zinc-100 text-zinc-500"
+      : debate.decision === "approve"
+        ? "border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
+        : debate.decision === "reject"
+          ? "border-rose-600/30 bg-rose-500/10 text-rose-700"
+          : debate.decision === "amend"
+            ? "border-amber-600/30 bg-amber-500/10 text-amber-700"
+            : "border-zinc-900/15 bg-white/60 text-zinc-700";
 
   return (
     <div className="relative min-h-screen bg-[#fafaf7] text-zinc-900">
       <div className="aurora opacity-40" />
       <div className="grain" />
 
-      <header className="relative z-10 border-b border-zinc-900/10 bg-white/60 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link href="/">
-            <Wordmark />
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/feed">
-              <Button size="sm" variant="ghost">
-                ← All sessions
-              </Button>
-            </Link>
-            <Link href="/parliament">
-              <Button size="sm">New debate</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="relative z-10 mx-auto max-w-5xl px-6 py-10">
+        <Link
+          href="/feed"
+          className="mb-4 inline-block font-mono text-[11px] uppercase tracking-widest text-zinc-500 hover:text-zinc-900"
+        >
+          ← All sessions
+        </Link>
         <section className="rounded-2xl border border-zinc-900/10 bg-white/70 p-6 backdrop-blur">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -97,7 +89,9 @@ export default async function DebateReplayPage({
             <Badge variant="outline" className={`shrink-0 ${decisionColor}`}>
               {debate.status === "done"
                 ? debate.decision?.toUpperCase() ?? "DONE"
-                : debate.status.toUpperCase()}
+                : debate.status === "abandoned"
+                  ? "INTERRUPTED"
+                  : debate.status.toUpperCase()}
             </Badge>
           </div>
         </section>
