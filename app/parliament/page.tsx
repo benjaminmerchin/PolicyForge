@@ -300,10 +300,19 @@ function ParliamentInner() {
         <section className="rounded-2xl border border-zinc-900/10 bg-white/70 p-5 backdrop-blur md:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+              <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
                 <span>Bill in session</span>
                 <span className="text-zinc-300">·</span>
                 <span className="text-zinc-700">{activeBill.code}</span>
+                {requestedBillSlug && mode === "custom" && (
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-emerald-600/30 bg-emerald-500/10 text-emerald-700"
+                  >
+                    <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 live-dot text-emerald-500" />
+                    Live · Congress.gov
+                  </Badge>
+                )}
               </div>
               <h1 className="mt-2 font-display text-3xl tracking-tight md:text-4xl">
                 {activeBill.title}

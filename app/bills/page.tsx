@@ -22,6 +22,8 @@ export default async function BillsPage() {
     error = e instanceof Error ? e.message : "Unknown error";
   }
 
+  const fetchedAt = new Date();
+
   return (
     <div className="relative min-h-screen bg-[#fafaf7] text-zinc-900">
       <div className="aurora opacity-50" />
@@ -32,16 +34,32 @@ export default async function BillsPage() {
       <main className="relative z-10 mx-auto max-w-5xl px-6 py-12">
         <div className="mb-10 flex flex-wrap items-end justify-between gap-6">
           <div className="max-w-2xl">
-            <p className="font-mono text-[11px] uppercase tracking-widest text-zinc-500">
-              Live · Congress.gov · cached 10min
-            </p>
-            <h1 className="mt-2 font-display text-5xl tracking-tight md:text-6xl">
+            <Badge
+              variant="outline"
+              className="gap-1.5 border-emerald-600/30 bg-emerald-500/10 font-mono text-[11px] uppercase tracking-widest text-emerald-700"
+            >
+              <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 live-dot text-emerald-500" />
+              Live · Congress.gov
+            </Badge>
+            <h1 className="mt-3 font-display text-5xl tracking-tight md:text-6xl">
               Recent bills
             </h1>
             <p className="mt-4 text-zinc-600">
-              The U.S. Congress, sorted by latest action. Click any bill to convene a
-              cabinet to debate it. The summary used is the official CRS summary
-              when available — fallback is the latest legislative action.
+              Real bills currently moving through the U.S. Congress, sorted by latest
+              action. Click any bill to convene a cabinet to debate it. The summary
+              shown is the official CRS summary when available — fallback is the
+              latest legislative action.
+            </p>
+            <p className="mt-3 font-mono text-[11px] uppercase tracking-widest text-zinc-500">
+              Source: api.congress.gov · fetched{" "}
+              {fetchedAt.toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+                timeZone: "America/Los_Angeles",
+                timeZoneName: "short",
+              })}{" "}
+              · {bills.length} bills · cached 10 min
             </p>
           </div>
         </div>
